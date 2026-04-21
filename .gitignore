@@ -1,1 +1,10 @@
+# Credenziali ESP32 — MAI su GitHub
+firmware-esp32/include/secrets.h
 
+# Variabili d'ambiente backend — MAI su GitHub
+backend-server/.env
+
+# Roba di sistema
+.DS_Store
+node_modules/
+.pio/
