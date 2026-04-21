@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="smartplant-api" content="https://YOUR-RENDER-SERVICE.onrender.com" />
+    <meta name="smartplant-device" content="plant-01" />
+    <title>SmartPlant Cloud Dashboard</title>
+    <link rel="stylesheet" href="style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <div>
+          <h1>SmartPlant Cloud</h1>
+          <p>Monitoraggio pianta, decisioni cloud e irrigazione asincrona</p>
+        </div>
+        <span id="liveBadge" class="badge badge-neutral">Connessione…</span>
+      </header>
+
+      <section class="grid stats-grid">
+        <article class="card stat-card">
+          <h2>Umidità terreno</h2>
+          <div class="stat-value" id="soilValue">--%</div>
+          <small id="soilDetail">Soglia automatica: --</small>
+        </article>
+
+        <article class="card stat-card">
+          <h2>Temperatura</h2>
+          <div class="stat-value" id="tempValue">-- °C</div>
+          <small>BMP280</small>
+        </article>
+
+        <article class="card stat-card">
+          <h2>Pressione</h2>
+          <div class="stat-value" id="pressureValue">-- hPa</div>
+          <small>BMP280</small>
+        </article>
+
+        <article class="card stat-card">
+          <h2>Stato irrigazione</h2>
+          <div class="stat-value" id="wateringValue">--</div>
+          <small id="wateringDetail">Attendo dati…</small>
+        </article>
+      </section>
+
+      <section class="grid main-grid">
+        <article class="card">
+          <div class="card-header">
+            <h2>Decisione cloud</h2>
+            <span id="decisionBadge" class="badge badge-neutral">--</span>
+          </div>
+          <ul class="status-list">
+            <li><strong>Pioggia prevista:</strong> <span id="rainValue">--</span></li>
+            <li><strong>Sospensione:</strong> <span id="suspendValue">--</span></li>
+            <li><strong>Ultima telemetria:</strong> <span id="lastTelemetry">--</span></li>
+            <li><strong>Motivo:</strong> <span id="reasonValue">--</span></li>
+            <li><strong>Sleep impostato:</strong> <span id="sleepValue">--</span></li>
+          </ul>
+        </article>
+
+        <article class="card">
+          <div class="card-header">
+            <h2>Controllo manuale</h2>
+            <span id="manualBadge" class="badge badge-neutral">Nessun comando</span>
+          </div>
+          <label for="manualDuration">Durata pompa (secondi)</label>
+          <input id="manualDuration" type="number" min="1" max="30" value="5" />
+          <div class="button-row">
+            <button id="manualButton">Irriga ora (asincrono)</button>
+            <button id="cancelButton" class="secondary">Annulla comando</button>
+          </div>
+          <p id="manualMessage" class="helper-text">
+            Il comando viene messo in coda: l'ESP32 lo esegue al prossimo wake-up dal deep sleep.
+          </p>
+        </article>
+      </section>
+
+      <section class="grid chart-grid">
+        <article class="card chart-card">
+          <div class="card-header">
+            <h2>Trend umidità terreno</h2>
+          </div>
+          <canvas id="soilChart"></canvas>
+        </article>
+
+        <article class="card chart-card">
+          <div class="card-header">
+            <h2>Trend ambiente</h2>
+          </div>
+          <canvas id="envChart"></canvas>
+        </article>
+      </section>
+    </div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
+
+
