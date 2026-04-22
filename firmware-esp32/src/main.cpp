@@ -191,7 +191,7 @@ bool connectWiFi(uint32_t timeoutMs = WIFI_TIMEOUT_MS) {
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
   if (String(topic) != topicState) return;
 
-  StaticJsonDocument<768> doc;
+  JsonDocument doc;
   if (deserializeJson(doc, payload, length)) {
     Serial.println("JSON state parse error");
     return;
@@ -252,7 +252,7 @@ bool publishJson(const String& topic, JsonDocument& doc, bool retained = false) 
 }
 
 void publishBootEvent() {
-  StaticJsonDocument<256> doc;
+  JsonDocument doc;
   doc["type"]         = "boot";
   doc["deviceId"]     = deviceId;
   doc["soilMoisture"] = telemetry.soilMoisture;
@@ -261,7 +261,7 @@ void publishBootEvent() {
 }
 
 void publishTelemetry() {
-  StaticJsonDocument<512> doc;
+  JsonDocument doc;
   doc["deviceId"]     = deviceId;
   doc["rawSoil"]      = telemetry.rawSoil;
   doc["soilMoisture"] = telemetry.soilMoisture;
@@ -280,7 +280,7 @@ void publishTelemetry() {
 }
 
 void publishWateringStarted(bool manualMode, int durationSec) {
-  StaticJsonDocument<256> doc;
+  JsonDocument doc;
   doc["type"]        = "watering_started";
   doc["deviceId"]    = deviceId;
   doc["manual"]      = manualMode;
@@ -289,7 +289,7 @@ void publishWateringStarted(bool manualMode, int durationSec) {
 }
 
 void publishWateringFinished(bool manualMode, int durationSec) {
-  StaticJsonDocument<256> doc;
+  JsonDocument doc;
   doc["type"]        = "watering_finished";
   doc["deviceId"]    = deviceId;
   doc["manual"]      = manualMode;
@@ -298,7 +298,7 @@ void publishWateringFinished(bool manualMode, int durationSec) {
 }
 
 void publishWateringSkipped(const String& reason) {
-  StaticJsonDocument<256> doc;
+  JsonDocument doc;
   doc["type"]     = "watering_skipped";
   doc["deviceId"] = deviceId;
   doc["reason"]   = reason;
