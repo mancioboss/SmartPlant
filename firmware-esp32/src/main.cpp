@@ -13,17 +13,19 @@
 
 // ============================================================
 // SMARTPLANT CLOUD - ESP32D WIFI+BT N4XX
+// Pin map:
+// - Soil capacitive sensor: GPIO26 (ADC2 - leggere PRIMA del WiFi)
+// - Relay driver (transistor NPN): GPIO32
+// - I2C SDA: GPIO21  SCL: GPIO22
+// - BMP280 + AHT20 + OLED SSD1315 sullo stesso bus I2C
 // ============================================================
 
-// -------------------- PINOUT --------------------
-// Rimosse le definizioni statiche che andavano in conflitto con secrets.h
-
 // -------------------- OLED --------------------
-static const uint8_t OLED_W        = SCREEN_WIDTH;
-static const uint8_t OLED_H        = SCREEN_HEIGHT;
-static const uint8_t OLED_ADDR     = 0x3C;
+// SCREEN_WIDTH e SCREEN_HEIGHT arrivano da secrets.h come #define
+// → NON ridichiarare static const con gli stessi nomi (conflitto preprocessore)
+static const uint8_t OLED_ADDR = 0x3C;
 
-Adafruit_SSD1306 display(OLED_W, OLED_H, &Wire, OLED_RST);
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RST);
 
 // -------------------- SENSORI --------------------
 Adafruit_BMP280 bmp;
@@ -34,7 +36,6 @@ WiFiClientSecure secureClient;
 PubSubClient     mqttClient(secureClient);
 
 // -------------------- COSTANTI LOGICHE --------------------
-// Usano i define presenti in secrets.h
 static const uint32_t DEFAULT_SLEEP_SEC            = DEFAULT_SLEEP_SECONDS;
 static const uint16_t MQTT_WAIT_RETAINED_MS        = RETAINED_STATE_WAIT_MS;
 static const uint16_t MQTT_WAIT_AFTER_TELEMETRY_MS = DECISION_WAIT_MS;
@@ -49,34 +50,28 @@ String topicEvent;
 struct TelemetryData {
   int   rawSoil      = 0;
   float soilMoisture = 0.0f;
-
   bool  bmpOk          = false;
   float bmpTemperature = NAN;
   float bmpPressure    = NAN;
-
   bool  ahtOk          = false;
   float ahtTemperature = NAN;
   float airHumidity    = NAN;
-
-  int wifiRssi = 0;
+  int   wifiRssi       = 0;
 };
 
 struct CloudState {
-  bool received           = false;
-  uint32_t lastMessageAtMs = 0;
-
-  bool manualWaterPending = false;
-  bool shouldWaterNow     = false;
-  bool suspendIrrigation  = false;
-  bool rainPredicted      = false;
-  bool decisionFromCloud  = false;
-
-  int sleepTimeSec         = DEFAULT_SLEEP_SEC;
-  int manualDurationSec    = DEFAULT_MANUAL_WATER_SECONDS;
-  int autoWaterDurationSec = DEFAULT_AUTO_WATER_SECONDS;
-
-  String commandId = "";
-  String reason    = "";
+  bool     received            = false;
+  uint32_t lastMessageAtMs     = 0;
+  bool     manualWaterPending  = false;
+  bool     shouldWaterNow      = false;
+  bool     suspendIrrigation   = false;
+  bool     rainPredicted       = false;
+  bool     decisionFromCloud   = false;
+  int      sleepTimeSec        = DEFAULT_SLEEP_SECONDS;
+  int      manualDurationSec   = DEFAULT_MANUAL_WATER_SECONDS;
+  int      autoWaterDurationSec = DEFAULT_AUTO_WATER_SECONDS;
+  String   commandId           = "";
+  String   reason              = "";
 };
 
 TelemetryData telemetry;
@@ -114,11 +109,12 @@ void drawScreen(const String& title,
 }
 
 float mapSoilToPercent(int raw) {
-  int constrained = constrain(raw, SOIL_RAW_WET, SOIL_RAW_DRY);
-  float pct = 100.0f * float(SOIL_RAW_DRY - constrained) / float(SOIL_RAW_DRY - SOIL_RAW_WET);
+  int   clamped = constrain(raw, SOIL_RAW_WET, SOIL_RAW_DRY);
+  float pct     = 100.0f * float(SOIL_RAW_DRY - clamped) / float(SOIL_RAW_DRY - SOIL_RAW_WET);
   return constrain(pct, 0.0f, 100.0f);
 }
 
+// GPIO26 è ADC2: DEVE essere letto prima di WiFi.begin()
 int readSoilRawFiltered() {
   const int samples = 12;
   long sum = 0;
@@ -132,7 +128,6 @@ int readSoilRawFiltered() {
 void readSensors() {
   analogReadResolution(12);
   analogSetPinAttenuation(SOIL_PIN, ADC_11db);
-
   telemetry.rawSoil      = readSoilRawFiltered();
   telemetry.soilMoisture = mapSoilToPercent(telemetry.rawSoil);
 
@@ -172,18 +167,15 @@ bool connectWiFi(uint32_t timeoutMs = WIFI_TIMEOUT_MS) {
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   drawScreen("WiFi connect", WIFI_SSID);
-
   uint32_t start = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - start < timeoutMs) {
     delay(300);
   }
-
   if (WiFi.status() == WL_CONNECTED) {
     telemetry.wifiRssi = WiFi.RSSI();
     drawScreen("WiFi OK", WiFi.localIP().toString(), "RSSI " + String(telemetry.wifiRssi));
     return true;
   }
-
   drawScreen("WiFi FAIL");
   return false;
 }
@@ -197,15 +189,15 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     return;
   }
 
-  cloudState.received           = true;
-  cloudState.lastMessageAtMs   = millis();
-  cloudState.manualWaterPending  = doc["manualWaterPending"]  | false;
-  cloudState.shouldWaterNow      = doc["shouldWaterNow"]      | false;
-  cloudState.suspendIrrigation   = doc["suspendIrrigation"]   | false;
-  cloudState.rainPredicted       = doc["rainPredicted"]       | false;
-  cloudState.decisionFromCloud   = doc["decisionFromCloud"]   | false;
-  cloudState.sleepTimeSec        = doc["sleepTimeSec"]        | (int)DEFAULT_SLEEP_SEC;
-  cloudState.manualDurationSec   = doc["manualDurationSec"]   | (int)DEFAULT_MANUAL_WATER_SECONDS;
+  cloudState.received            = true;
+  cloudState.lastMessageAtMs     = millis();
+  cloudState.manualWaterPending  = doc["manualWaterPending"]   | false;
+  cloudState.shouldWaterNow      = doc["shouldWaterNow"]       | false;
+  cloudState.suspendIrrigation   = doc["suspendIrrigation"]    | false;
+  cloudState.rainPredicted       = doc["rainPredicted"]        | false;
+  cloudState.decisionFromCloud   = doc["decisionFromCloud"]    | false;
+  cloudState.sleepTimeSec        = doc["sleepTimeSec"]         | (int)DEFAULT_SLEEP_SECONDS;
+  cloudState.manualDurationSec   = doc["manualDurationSec"]    | (int)DEFAULT_MANUAL_WATER_SECONDS;
   cloudState.autoWaterDurationSec = doc["autoWaterDurationSec"] | (int)DEFAULT_AUTO_WATER_SECONDS;
   cloudState.commandId = String((const char*)(doc["commandId"] | ""));
   cloudState.reason    = String((const char*)(doc["reason"]    | ""));
@@ -222,7 +214,6 @@ bool connectMqtt(uint32_t timeoutMs = MQTT_TIMEOUT_MS) {
   mqttClient.setBufferSize(1024);
 
   String clientId = "esp32-" + deviceId + "-" + String((uint32_t)ESP.getEfuseMac(), HEX);
-
   uint32_t start = millis();
   while (!mqttClient.connected() && millis() - start < timeoutMs) {
     if (mqttClient.connect(clientId.c_str(), MQTT_USER, MQTT_PASSWORD)) {
@@ -232,7 +223,6 @@ bool connectMqtt(uint32_t timeoutMs = MQTT_TIMEOUT_MS) {
     }
     delay(700);
   }
-
   drawScreen("MQTT FAIL");
   return false;
 }
@@ -281,27 +271,22 @@ void publishTelemetry() {
 
 void publishWateringStarted(bool manualMode, int durationSec) {
   JsonDocument doc;
-  doc["type"]        = "watering_started";
-  doc["deviceId"]    = deviceId;
-  doc["manual"]      = manualMode;
-  doc["durationSec"] = durationSec;
+  doc["type"] = "watering_started"; doc["deviceId"] = deviceId;
+  doc["manual"] = manualMode; doc["durationSec"] = durationSec;
   publishJson(topicEvent, doc, false);
 }
 
 void publishWateringFinished(bool manualMode, int durationSec) {
   JsonDocument doc;
-  doc["type"]        = "watering_finished";
-  doc["deviceId"]    = deviceId;
-  doc["manual"]      = manualMode;
-  doc["durationSec"] = durationSec;
+  doc["type"] = "watering_finished"; doc["deviceId"] = deviceId;
+  doc["manual"] = manualMode; doc["durationSec"] = durationSec;
   publishJson(topicEvent, doc, false);
 }
 
 void publishWateringSkipped(const String& reason) {
   JsonDocument doc;
-  doc["type"]     = "watering_skipped";
-  doc["deviceId"] = deviceId;
-  doc["reason"]   = reason;
+  doc["type"] = "watering_skipped"; doc["deviceId"] = deviceId;
+  doc["reason"] = reason;
   publishJson(topicEvent, doc, false);
 }
 
@@ -310,11 +295,8 @@ void publishWateringSkipped(const String& reason) {
 // ============================================================
 
 void waterForSeconds(int durationSec, bool manualMode) {
-  drawScreen(
-    manualMode ? "Manual watering" : "Auto watering",
-    "Relay ON",
-    "Durata: " + String(durationSec) + " sec"
-  );
+  drawScreen(manualMode ? "Manual watering" : "Auto watering",
+             "Relay ON", "Durata: " + String(durationSec) + " sec");
   publishWateringStarted(manualMode, durationSec);
   relayOn();
   delay((uint32_t)durationSec * 1000UL);
@@ -325,6 +307,7 @@ void waterForSeconds(int durationSec, bool manualMode) {
 
 void goToDeepSleep(uint32_t sleepSec) {
   drawScreen("Deep sleep", "For " + String(sleepSec) + " sec");
+  Serial.printf("Sleep per %u secondi\n", sleepSec);
   delay(600);
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);
@@ -349,31 +332,41 @@ void setup() {
   initTopics();
 
   drawScreen("SmartPlant boot", deviceId);
+
+  // IMPORTANTE: leggo GPIO26 (ADC2) PRIMA di WiFi.begin()
   readSensors();
 
-  drawScreen(
-    "Read sensors",
-    "Soil: " + String(telemetry.soilMoisture, 1) + "%",
-    telemetry.bmpOk ? "BMP: OK" : "BMP: FAIL",
-    telemetry.ahtOk ? "AHT: OK" : "AHT: FAIL"
-  );
+  drawScreen("Read sensors",
+             "Soil: " + String(telemetry.soilMoisture, 1) + "% raw:" + String(telemetry.rawSoil),
+             telemetry.bmpOk ? "BMP: OK T=" + String(telemetry.bmpTemperature,1) : "BMP: FAIL",
+             telemetry.ahtOk ? "AHT: OK H=" + String(telemetry.airHumidity,1) : "AHT: FAIL");
+
+  Serial.printf("Soil raw=%d  moisture=%.1f%%\n", telemetry.rawSoil, telemetry.soilMoisture);
 
   bool wifiOk = connectWiFi();
   if (!wifiOk) {
-    if (telemetry.soilMoisture < SOIL_THRESHOLD_PERCENT) waterForSeconds(DEFAULT_AUTO_WATER_SECONDS, false);
-    goToDeepSleep(1800);
+    Serial.println("WiFi fallback locale");
+    if (telemetry.soilMoisture < SOIL_THRESHOLD_PERCENT)
+      waterForSeconds(DEFAULT_AUTO_WATER_SECONDS, false);
+    goToDeepSleep(FALLBACK_SLEEP_SEC);   // ← usa FALLBACK_SLEEP_SEC, non 1800
   }
 
   bool mqttOk = connectMqtt();
   if (!mqttOk) {
-    if (telemetry.soilMoisture < SOIL_THRESHOLD_PERCENT) waterForSeconds(DEFAULT_AUTO_WATER_SECONDS, false);
-    goToDeepSleep(1800);
+    Serial.println("MQTT fallback locale");
+    if (telemetry.soilMoisture < SOIL_THRESHOLD_PERCENT)
+      waterForSeconds(DEFAULT_AUTO_WATER_SECONDS, false);
+    goToDeepSleep(FALLBACK_SLEEP_SEC);   // ← usa FALLBACK_SLEEP_SEC, non 1800
   }
 
+  // 1) Leggi retained state dal broker
   pumpMqttLoop(MQTT_WAIT_RETAINED_MS);
+
+  // 2) Invia boot event + telemetria
   publishBootEvent();
   publishTelemetry();
 
+  // 3) Aspetta la decisione aggiornata dal backend
   uint32_t afterPublish = millis();
   while (millis() - afterPublish < MQTT_WAIT_AFTER_TELEMETRY_MS) {
     mqttClient.loop();
@@ -389,19 +382,24 @@ void setup() {
     doManual         = cloudState.manualWaterPending;
     doWater          = cloudState.shouldWaterNow;
     waterDurationSec = doManual ? cloudState.manualDurationSec : cloudState.autoWaterDurationSec;
-    nextSleepSec     = cloudState.sleepTimeSec > 0 ? (uint32_t)cloudState.sleepTimeSec : DEFAULT_SLEEP_SEC;
+    nextSleepSec     = cloudState.sleepTimeSec > 0
+                       ? (uint32_t)cloudState.sleepTimeSec
+                       : DEFAULT_SLEEP_SEC;
 
-    drawScreen(
-      "Cloud decision",
-      "Soil " + String(telemetry.soilMoisture, 1) + "%",
-      doWater ? "WATER YES" : "WATER NO",
-      cloudState.suspendIrrigation ? "Rain suspend" : "Rain clear",
-      cloudState.reason
-    );
+    Serial.printf("Cloud: water=%d manual=%d sleep=%u reason=%s\n",
+                  doWater, doManual, nextSleepSec, cloudState.reason.c_str());
+
+    drawScreen("Cloud decision",
+               "Soil " + String(telemetry.soilMoisture, 1) + "%",
+               doWater ? "WATER YES" : "WATER NO",
+               cloudState.suspendIrrigation ? "Rain suspend" : "Rain clear",
+               cloudState.reason);
   } else {
+    // Fallback locale: usa FALLBACK_SLEEP_SEC invece di 1800 hardcodato
+    Serial.println("Nessun cloud state → fallback locale");
     doWater          = telemetry.soilMoisture < SOIL_THRESHOLD_PERCENT;
     waterDurationSec = DEFAULT_AUTO_WATER_SECONDS;
-    nextSleepSec     = doWater ? 1800 : DEFAULT_SLEEP_SEC;
+    nextSleepSec     = FALLBACK_SLEEP_SEC;
     drawScreen("Local fallback", "No cloud state", doWater ? "WATER YES" : "WATER NO");
   }
 
@@ -418,4 +416,6 @@ void setup() {
   goToDeepSleep(nextSleepSec);
 }
 
-void loop() {}
+void loop() {
+  // mai usato: deep sleep da setup()
+}
